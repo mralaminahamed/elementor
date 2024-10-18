@@ -124,11 +124,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Send slack message
         if: failure() || always()
-        run: |
-          if [ -f known_issues.txt ]; then
-            echo "Known issues found:"
-            cat known_issues.txt
-          fi
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
