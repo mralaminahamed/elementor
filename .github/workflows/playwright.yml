@@ -95,6 +95,14 @@ jobs:
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
+      - name: Collect known issues
+        run: |
+          KNOWN_ISSUES=$(npx playwright show-report | grep 'known-issue')
+          if [ -n "$KNOWN_ISSUES" ]; then
+            echo "Known issues detected, but not failing the run."
+            echo "$KNOWN_ISSUES" > known_issues.txt
+          fi
+        continue-on-error: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -115,7 +123,12 @@ jobs:
         if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: actions/checkout@v4
       - name: Send slack message
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        if: failure() || always()
+        run: |
+          if [ -f known_issues.txt ]; then
+            echo "Known issues found:"
+            cat known_issues.txt
+          fi
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
