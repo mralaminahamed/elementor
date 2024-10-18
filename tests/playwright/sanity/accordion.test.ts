@@ -2,9 +2,8 @@ import { expect } from '@playwright/test';
 import { parallelTest as test } from '../parallelTest';
 import WpAdminPage from '../pages/wp-admin-page';
 
-test( 'Accordion', async ( { page, apiRequests }, testInfo ) => {
+test( 'Accordion', { tag: '@known-issue' }, async ( { page, apiRequests }, testInfo ) => {
 	// Arrange.
-	test.info().annotations.push( { type: 'issue', description: 'known-issue' } );
 	const wpAdmin = new WpAdminPage( page, testInfo, apiRequests ),
 		editor = await wpAdmin.openNewPage();
 
