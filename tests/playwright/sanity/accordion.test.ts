@@ -11,8 +11,6 @@ test( 'Accordion', { tag: '@known-issue' }, async ( { page, apiRequests }, testI
 	await editor.addWidget( 'accordion' );
 
 	// Assert
-	await editor.togglePreviewMode();
-	await page.pause();
 	expect( await editor.getPreviewFrame()
 		.locator( '.elementor-widget-wrap > .elementor-background-overlay' )
 		.screenshot( { type: 'jpeg', quality: 90 } ) )
