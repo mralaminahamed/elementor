@@ -78,7 +78,7 @@ jobs:
         run: |
           npm run start-local-server
       - name: Update wordpress to nightly build
-        if: ${{ github.event_name == 'schedule' }}
+        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -91,10 +91,16 @@ jobs:
           npx playwright install chromium
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' }}
-        run: npm run test:playwright  -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
+        run: |
+          npm run test:playwright -- --grep='@known-issue' || true # Игнорируем фейл для known issues
+          npm run test:playwright -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
+
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
-        run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
+        run: |
+          npm run test:playwright:elements-regression -- --grep='@known-issue' || true
+          npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
+
       - name: Collect known issues
         run: |
           KNOWN_ISSUES=$(npx playwright show-report | grep 'known-issue')
@@ -122,6 +128,12 @@ jobs:
       - name: Checkout source code
         if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: actions/checkout@v4
+      - name: Get failed test names
+        id: failed-tests
+        run: |
+          FAILED_TESTS=$(npx playwright show-report | grep '✖' | awk '{print $2}')
+          echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
+
       - name: Send slack message
         if: failure() || always()
         uses: ./.github/workflows/post-to-slack
@@ -130,13 +142,13 @@ jobs:
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Playwright with WordPress nightly has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Playwright tests have failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Elementor Core: Playwright with WordPress nightly failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*Failed Tests:*\n ${{ env.FAILED_TESTS }}"
                   }
                 }
               ]
