@@ -138,10 +138,10 @@ jobs:
 
       - name: Send slack message
         if: failure() || always()
-        uses: ./.github/workflows/post-to-slack
+        uses: slackapi/slack-github-action@v1.23.0
         with:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
-          SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
+          slack-token: ${{ secrets.SLACK_TOKEN }}
+          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
               "text": "Playwright tests have failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
