@@ -137,12 +137,10 @@ jobs:
           echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
 
       - name: Send slack message
-        if: failure() || always()
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          slack-token: ${{ secrets.SLACK_TOKEN }}
-          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}
-          PAYLOAD: |
+          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}  # Provide the correct Slack channel ID
+          payload: |
             {
               "text": "Playwright tests have failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
@@ -155,6 +153,9 @@ jobs:
                 }
               ]
             }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
+
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
