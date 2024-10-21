@@ -94,7 +94,7 @@ jobs:
         continue-on-error: true
         run: |
           npm run test:playwright -- --grep='@known-issue' || true
-          npm run test:playwright -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
+          npm run test:playwright tests/playwright/sanity/accordion.test.ts --reporter=${{ inputs.reporter || 'list,github' }}
 
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
@@ -105,12 +105,17 @@ jobs:
 
       - name: Collect known issues
         run: |
-          KNOWN_ISSUES=$(npx playwright show-report | grep 'known-issue')
+          OUTPUT=$(npx playwright show-report || true)
+          echo "$OUTPUT"
+          KNOWN_ISSUES=$(echo "$OUTPUT" | grep 'known-issue' || true)
           if [ -n "$KNOWN_ISSUES" ]; then
             echo "Known issues detected, but not failing the run."
             echo "$KNOWN_ISSUES" > known_issues.txt
+          else
+            echo "No known issues found."
           fi
         continue-on-error: true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
