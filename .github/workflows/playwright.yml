@@ -110,25 +110,48 @@ jobs:
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-      - name: Send Slack message
-        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' }}
+
+      - name: Send Slack message for known issues failures
+        if: ${{ github.event_name == 'schedule' && needs.Playwright.outputs.known_issues_failed == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": ${{ needs.Playwright.outputs.known_issues_failed == 'true' ? "Attention: there are failures in known issues" : "Elementor Core: Playwright with WordPress nightly has failed" }},
+              "text": "Attention: there are failures in known issues",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ${{ needs.Playwright.outputs.known_issues_failed == 'true' ? "Attention: there are failures in known issues" : "Elementor Core: Playwright with WordPress nightly failed" }}
+                    "text": "Attention: there are failures in known issues"
                   }
                 }
               ]
             }
+
+      - name: Send Slack message for general failure
+        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && needs.Playwright.outputs.known_issues_failed != 'true' }}
+        uses: ./.github/workflows/post-to-slack
+        with:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
+          PAYLOAD: |
+            {
+              "text": "Elementor Core: Playwright with WordPress nightly has failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Elementor Core: Playwright with WordPress nightly failed"
+                  }
+                }
+              ]
+            }
+
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
+
