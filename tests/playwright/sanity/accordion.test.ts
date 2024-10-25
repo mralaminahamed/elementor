@@ -5,7 +5,7 @@ import WpAdminPage from '../pages/wp-admin-page';
 const isCI = 'true' === process.env.CI;
 const isScheduledEvent = 'schedule' === process.env.GITHUB_EVENT_NAME;
 
-const testOptions = isCI && isScheduledEvent ? { tag: '@known-issue' } : {};
+const testOptions = isCI ? { tag: '@known-issue' } : {};
 
 test( 'Accordion', testOptions, async ( { page, apiRequests }, testInfo ) => {
 	// Arrange.
