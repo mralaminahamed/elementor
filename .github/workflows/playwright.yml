@@ -138,7 +138,7 @@ jobs:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
       - name: Checkout source code
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        #if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: actions/checkout@v4
       - name: Get failed test names and known issues
         id: failed-tests
