@@ -31,6 +31,7 @@ on:
         description: 'Cancel tests when one of them fails'
         default: false
 
+# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
@@ -39,17 +40,16 @@ jobs:
   build-plugin:
     name: Build plugin
     uses: ./.github/workflows/build.yml
-
   Playwright:
     name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
     runs-on: ubuntu-latest
     needs: [build-plugin]
     if: ${{ github.event.pull_request.title == null || needs.build-plugin.outputs.changelog_diff }}
     strategy:
-      fail-fast: ${{ inputs.fail_fast || false }}
+      fail-fast: ${{ inputs.fail_fast || true }}
       matrix:
-        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        shardTotal: [10]
+        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
+        shardTotal: [ 10 ]
         include:
           - shardIndex: "elements-regression"
     steps:
@@ -77,7 +77,10 @@ jobs:
       - name: Install WordPress environment
         run: |
           npm run start-local-server
-      - name: Update WordPress to nightly build
+      - name: Update wordpress to nightly build
+        #TODO: remove comment from this line before merge
+        #commented to update the wp build
+        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -89,36 +92,14 @@ jobs:
         run: |
           npx playwright install chromium
       - name: Run Playwright tests
-        if: ${{ matrix.shardIndex != 'elements-regression' }}
-        run: |
-          npm run test:playwright -- --grep='@known-issue' || true
-          npm run test:playwright --reporter=${{ inputs.reporter || 'list,github' }}
+        if: ${{ matrix.shardIndex != 'elements-regression' || 'known-issues' }}
+        run: npm run test:playwright  -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
-        run: |
-          npm run test:playwright:elements-regression -- --grep='@known-issue' || true
-          npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
-
-      - name: Collect known issues and failures
-        id: collect-issues
-        run: |
-          OUTPUT=$(npx playwright show-report || true)
-          KNOWN_ISSUES=$(echo "$OUTPUT" | grep '@known-issue' || true)
-          FAILURES=$(echo "$OUTPUT" | grep '✖' | awk '{print $2}')
-          if [ -n "$KNOWN_ISSUES" ]; then
-            echo "Known issues detected:"
-            echo "$KNOWN_ISSUES"
-            echo "$KNOWN_ISSUES" > known_issues.txt
-          else
-            echo "No known issues found."
-          fi
-          if [ -n "$FAILURES" ]; then
-            echo "Failures detected:"
-            echo "$FAILURES"
-            echo "$FAILURES" > failures.txt
-          fi
-        continue-on-error: true
-
+        run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
+      - name: Run tests with known issues
+        if: ${{ martix.shardIndex == 'known-issues' }}
+        run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -129,50 +110,34 @@ jobs:
 
   test-result:
     needs: Playwright
-    if: ${{ always() }}
+    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
       - name: Checkout source code
-        #if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: actions/checkout@v4
-      - name: Get failed test names and known issues
-        id: failed-tests
-        run: |
-          FAILED_TESTS=$(cat failures.txt || true)
-          KNOWN_ISSUES=$(cat known_issues.txt || true)
-          echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
-          echo "KNOWN_ISSUES=$KNOWN_ISSUES" >> $GITHUB_ENV
-
-      - name: Send Slack message
-        uses: slackapi/slack-github-action@v1.23.0
+      - name: Send slack message
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        uses: ./.github/workflows/post-to-slack
         with:
-          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}
-          payload: |
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
+          PAYLOAD: |
             {
-              "text": "Playwright test results for run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>",
+              "text": "Elementor Core: Playwright with WordPress nightly has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Failed Tests:*\n${{ env.FAILED_TESTS }}"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Known Issues:*\n${{ env.KNOWN_ISSUES }}"
+                    "text": "Elementor Core: Playwright with WordPress nightly failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
-
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
