@@ -46,7 +46,7 @@ jobs:
     needs: [build-plugin]
     if: ${{ github.event.pull_request.title == null || needs.build-plugin.outputs.changelog_diff }}
     strategy:
-      fail-fast: ${{ inputs.fail_fast || true }}
+      fail-fast: ${{ inputs.fail_fast || false }}
       matrix:
         shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         shardTotal: [10]
@@ -90,13 +90,11 @@ jobs:
           npx playwright install chromium
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' }}
-        continue-on-error: true
         run: |
           npm run test:playwright -- --grep='@known-issue' || true
-          npm run test:playwright tests/playwright/sanity/accordion.test.ts --reporter=${{ inputs.reporter || 'list,github' }}
+          npm run test:playwright --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
-        continue-on-error: true
         run: |
           npm run test:playwright:elements-regression -- --grep='@known-issue' || true
           npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
