@@ -52,6 +52,7 @@ jobs:
         shardTotal: [ 10 ]
         include:
           - shardIndex: "elements-regression"
+          - shardIndex: "known-issues"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -98,7 +99,7 @@ jobs:
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run tests with known issues
-        if: ${{ martix.shardIndex == 'known-issues' }}
+        if: ${{ matrix.shardIndex == 'known-issues' }}
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
       - uses: actions/upload-artifact@v4
         if: always()
