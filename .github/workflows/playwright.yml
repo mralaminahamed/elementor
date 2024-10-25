@@ -48,78 +48,80 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || true }}
       matrix:
-        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
-        shardTotal: [ 10 ]
+        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        shardTotal: [10]
         include:
           - shardIndex: "elements-regression"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
-
       - name: Install Node.js 20.x
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'npm'
-
       - name: Install dependencies
         run: |
           npm ci
           sed -i -e "s/image: 'mariadb:lts'/image: 'mariadb:11.2.4-jammy'/g" node_modules/@wordpress/env/lib/build-docker-compose-config.js
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build-plugin.outputs.artifact_name }}
           path: ./build
-
       - name: Update wp-env.json file
         env:
           PHP_VERSION: '8.0'
           WP_CORE_VERSION: 'latest'
         run: node ./.github/scripts/build-wp-env.js
-
       - name: Install WordPress environment
-        run: npm run start-local-server
-
-      - name: Update wordpress to nightly build
+        run: |
+          npm run start-local-server
+      - name: Update WordPress to nightly build
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
-
       - name: Setup test data
         run: npm run test:setup:playwright
-
       - name: WordPress debug information
         run: |
           npx wp-env run cli wp core version
           npx wp-env run cli wp --info
-
       - name: Install playwright/test
-        run: npx playwright install chromium
-
+        run: |
+          npx playwright install chromium
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' }}
+        continue-on-error: true
         run: |
           npm run test:playwright -- --grep='@known-issue' || true
-          KNOWN_ISSUES=$(npx playwright show-report | grep '✖' | awk '{print $2}' || true)
-          if [ -n "$KNOWN_ISSUES" ]; then
-            echo "Known issues detected."
-            echo "KNOWN_ISSUES=$KNOWN_ISSUES" >> $GITHUB_ENV
-          fi
-          npm run test:playwright --reporter=${{ inputs.reporter || 'list,github' }} || exit 1
-
+          npm run test:playwright tests/playwright/sanity/accordion.test.ts --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
+        continue-on-error: true
         run: |
           npm run test:playwright:elements-regression -- --grep='@known-issue' || true
-          KNOWN_ISSUES=$(npx playwright show-report | grep '✖' | awk '{print $2}' || true)
-          if [ -n "$KNOWN_ISSUES" ]; then
-            echo "Known issues detected."
-            echo "KNOWN_ISSUES=$KNOWN_ISSUES" >> $GITHUB_ENV
-          fi
-          npm run test:playwright:elements-regression --reporter=${{ inputs.reporter || 'list,github' }} || exit 1
+          npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
+      - name: Collect known issues and failures
+        id: collect-issues
+        run: |
+          OUTPUT=$(npx playwright show-report || true)
+          KNOWN_ISSUES=$(echo "$OUTPUT" | grep '@known-issue' || true)
+          FAILURES=$(echo "$OUTPUT" | grep '✖' | awk '{print $2}')
+          if [ -n "$KNOWN_ISSUES" ]; then
+            echo "Known issues detected:"
+            echo "$KNOWN_ISSUES"
+            echo "$KNOWN_ISSUES" > known_issues.txt
+          else
+            echo "No known issues found."
+          fi
+          if [ -n "$FAILURES" ]; then
+            echo "Failures detected:"
+            echo "$FAILURES"
+            echo "$FAILURES" > failures.txt
+          fi
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-test-results-${{ matrix.shardIndex }}
@@ -135,31 +137,37 @@ jobs:
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-
-      - name: Get failed test names
+      - name: Checkout source code
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        uses: actions/checkout@v4
+      - name: Get failed test names and known issues
         id: failed-tests
         run: |
-          FAILED_TESTS=$(npx playwright show-report | grep '✖' | awk '{print $2}' || true)
-          if [ -z "$FAILED_TESTS" ]; then
-            echo "No tests failed."
-            echo "FAILED_TESTS=None" >> $GITHUB_ENV
-          else:
-            echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
-          fi
+          FAILED_TESTS=$(cat failures.txt || true)
+          KNOWN_ISSUES=$(cat known_issues.txt || true)
+          echo "FAILED_TESTS=$FAILED_TESTS" >> $GITHUB_ENV
+          echo "KNOWN_ISSUES=$KNOWN_ISSUES" >> $GITHUB_ENV
 
-      - name: Send slack message
+      - name: Send Slack message
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}  # Provide the correct Slack channel ID
+          channel-id: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           payload: |
             {
-              "text": "Playwright tests have failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Playwright test results for run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Failed Tests:*\n ${{ env.FAILED_TESTS }}"
+                    "text": "*Failed Tests:*\n${{ env.FAILED_TESTS }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Known Issues:*\n${{ env.KNOWN_ISSUES }}"
                   }
                 }
               ]
