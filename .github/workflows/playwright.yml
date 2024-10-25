@@ -31,7 +31,6 @@ on:
         description: 'Cancel tests when one of them fails'
         default: false
 
-# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
@@ -40,6 +39,7 @@ jobs:
   build-plugin:
     name: Build plugin
     uses: ./.github/workflows/build.yml
+
   Playwright:
     name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
     runs-on: ubuntu-latest
@@ -48,11 +48,8 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || true }}
       matrix:
-        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
+        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues" ]
         shardTotal: [ 10 ]
-        include:
-          - shardIndex: "elements-regression"
-          - shardIndex: "known-issues"
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -79,9 +76,6 @@ jobs:
         run: |
           npm run start-local-server
       - name: Update wordpress to nightly build
-        #TODO: remove comment from this line before merge
-        #commented to update the wp build
-        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -93,13 +87,14 @@ jobs:
         run: |
           npx playwright install chromium
       - name: Run Playwright tests
-        if: ${{ matrix.shardIndex != 'elements-regression' || 'known-issues' }}
-        run: npm run test:playwright  -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
+        if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
+        run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
+        continue-on-error: true
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
       - uses: actions/upload-artifact@v4
         if: always()
@@ -111,30 +106,25 @@ jobs:
 
   test-result:
     needs: Playwright
-    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
     runs-on: ubuntu-22.04
-    name: Playwright - Test Results
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-      - name: Checkout source code
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
-        uses: actions/checkout@v4
-      - name: Send slack message
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+      - name: Send Slack message
+        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Playwright with WordPress nightly has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": ${{ needs.Playwright.outputs.known_issues_failed == 'true' ? "Attention: there are failures in known issues" : "Elementor Core: Playwright with WordPress nightly has failed" }},
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Elementor Core: Playwright with WordPress nightly failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": ${{ needs.Playwright.outputs.known_issues_failed == 'true' ? "Attention: there are failures in known issues" : "Elementor Core: Playwright with WordPress nightly failed" }}
                   }
                 }
               ]
