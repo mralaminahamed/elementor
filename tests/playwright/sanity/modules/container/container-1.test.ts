@@ -4,7 +4,12 @@ import { getElementSelector } from '../../../assets/elements-utils';
 import WpAdminPage from '../../../pages/wp-admin-page';
 import widgets from '../../../enums/widgets';
 
-test.describe( 'Container tests @container', () => {
+const isCI = 'true' === process.env.CI;
+const isScheduledEvent = 'schedule' === process.env.GITHUB_EVENT_NAME;
+
+const testOptions = isCI ? { tag: '@known-issue' } : {};
+
+test.describe( 'Container tests @container', testOptions, () => {
 	test.beforeAll( async ( { browser, apiRequests }, testInfo ) => {
 		const context = await browser.newContext();
 		const page = await context.newPage();

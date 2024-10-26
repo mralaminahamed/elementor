@@ -96,6 +96,10 @@ jobs:
         if: ${{ matrix.shardIndex == 'known-issues' }}
         continue-on-error: true
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
+      - name: Set known issues failure output
+        if: ${{ failure() && matrix.shardIndex == 'known-issues' }}
+        run: echo "known_issues_failed=true" >> $GITHUB_ENV
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -112,8 +116,7 @@ jobs:
         run: echo "Test status is - ${{ needs.Playwright.result }}"
 
       - name: Send Slack message for known issues failures
-        #if: ${{ github.event_name == 'schedule' && needs.Playwright.outputs.known_issues_failed == 'true' }}
-        if: ${{ needs.Playwright.outputs.known_issues_failed == 'true' }}
+        if: ${{ env.known_issues_failed == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -126,14 +129,14 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Attention: there are failures in known issues!"
+                    "text": "Attention: there are failures in known issues"
                   }
                 }
               ]
             }
 
       - name: Send Slack message for general failure
-        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && needs.Playwright.outputs.known_issues_failed != 'true' }}
+        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -155,4 +158,3 @@ jobs:
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
-
