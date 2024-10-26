@@ -97,7 +97,8 @@ jobs:
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Set known issues failure output
         if: ${{ failure() && matrix.shardIndex == 'known-issues' }}
-        run: echo "known_issues_failed=true" >> $GITHUB_ENV
+        run: |
+          echo "known_issues_failed=true" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -113,6 +114,15 @@ jobs:
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
+
+      - name: Check if known issues failed
+        run: |
+          if [[ "${{ env.known_issues_failed }}" == "true" ]]; then
+            echo "Known issues failed"
+            echo "known_issues_failed=true" >> $GITHUB_ENV
+          else
+            echo "No known issues failed"
+          fi
 
       - name: Send Slack message for known issues failures
         if: ${{ env.known_issues_failed == 'true' }}
