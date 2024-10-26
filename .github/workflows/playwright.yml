@@ -112,7 +112,8 @@ jobs:
         run: echo "Test status is - ${{ needs.Playwright.result }}"
 
       - name: Send Slack message for known issues failures
-        if: ${{ github.event_name == 'schedule' && needs.Playwright.outputs.known_issues_failed == 'true' }}
+        #if: ${{ github.event_name == 'schedule' && needs.Playwright.outputs.known_issues_failed == 'true' }}
+        if: ${{ needs.Playwright.outputs.known_issues_failed == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -125,7 +126,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Attention: there are failures in known issues"
+                    "text": "Attention: there are failures in known issues!"
                   }
                 }
               ]
