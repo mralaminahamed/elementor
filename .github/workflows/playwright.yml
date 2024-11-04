@@ -117,11 +117,14 @@ jobs:
 
   test-result:
     needs: Playwright
+    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
     runs-on: ubuntu-22.04
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-
+      - name: Checkout source code
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        uses: actions/checkout@v4
       - name: Check if known issues failed
         run: |
           if [[ "${{ env.known_issues_failed }}" == "true" ]]; then
