@@ -152,7 +152,8 @@ jobs:
             }
 
       - name: Send Slack message for general failure
-        if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
+        #if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
+        if: ${{ needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
