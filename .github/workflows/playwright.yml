@@ -124,19 +124,9 @@ jobs:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
       - name: Checkout source code
-        #if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
-        #if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        if: ${{ env.known_issues_failed == 'true' }}
         uses: actions/checkout@v4
-      - name: Check if known issues failed
-        run: |
-          if [[ "${{ env.known_issues_failed }}" == "true" ]]; then
-            echo "Known issues failed"
-            echo "known_issues_failed=true" >> $GITHUB_ENV
-          else
-            echo "No known issues failed"
-          fi
-
-      - name: Send Slack message for known issues failures
+      - name: Send slack message
         if: ${{ env.known_issues_failed == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
@@ -144,39 +134,18 @@ jobs:
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Attention: there are failures in known issues",
+              "text": "Elementor Core: Playwright with WordPress nightly has known issues: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Attention: there are failures in known issues"
+                    "text": "Elementor Core: Playwright with WordPress nightly has known issues: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
             }
-
-      - name: Send Slack message for general failure
-        #if: ${{ github.event_name == 'schedule' && needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
-        if: ${{ needs.Playwright.result == 'failure' && env.known_issues_failed != 'true' }}
-        uses: ./.github/workflows/post-to-slack
-        with:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
-          SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
-          PAYLOAD: |
-            {
-              "text": "Elementor Core: Playwright with WordPress nightly has failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Elementor Core: Playwright with WordPress nightly failed"
-                  }
-                }
-              ]
-            }
-
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
+
