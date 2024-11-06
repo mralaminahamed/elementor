@@ -103,10 +103,11 @@ jobs:
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' }}
         run: |
-          TEST_TAG=${{ inputs.tag }}
+          KEYWORD=${{ inputs.tag }}
           RUN_CMD="npm run test:playwright -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}"
-          if [ ! -z "$TEST_TAG" ]; then
-            RUN_CMD="$RUN_CMD --grep @$TEST_TAG"
+          if [ ! -z "$KEYWORD" ];
+          then
+            RUN_CMD="$RUN_CMD --grep '$KEYWORD'"
           fi
           eval "$RUN_CMD"
       - name: Run element regression tests
