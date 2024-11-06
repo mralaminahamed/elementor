@@ -104,7 +104,7 @@ jobs:
         if: ${{ matrix.shardIndex != 'elements-regression' }}
         run: |
           if [ "${{ inputs.tag }}" != "" ]; then
-            npm run test:playwright -- --grep="${{ inputs.tag }}" --reporter=${{ inputs.reporter || 'list,github' }}
+            npm run test:playwright -- --grep="${{ inputs.tag }}" --shard=1/1 --reporter=${{ inputs.reporter || 'list,github' }}
           else
             npm run test:playwright -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
           fi
