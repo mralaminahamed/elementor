@@ -42,7 +42,6 @@ on:
         description: 'Run only tests with this tag (e.g., @video)'
         default: ''
 
-# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
@@ -51,6 +50,7 @@ jobs:
   build-plugin:
     name: Build plugin
     uses: ./.github/workflows/build.yml
+
   Playwright:
     name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
     runs-on: ubuntu-latest
@@ -59,10 +59,11 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || false }}
       matrix:
-        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
-        shardTotal: [ 10 ]
+        shardIndex: ${{ inputs.tag != '' && '1' || '1,2,3,4,5,6,7,8,9,10' }}
+        shardTotal: ${{ inputs.tag != '' && '1' || '10' }}
         include:
-        - shardIndex: "elements-regression"
+          - shardIndex: "elements-regression"
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -104,8 +105,10 @@ jobs:
         if: ${{ matrix.shardIndex != 'elements-regression' }}
         run: |
           if [ "${{ inputs.tag }}" != "" ]; then
+            # Run in a single shard when tag is provided
             npm run test:playwright -- --grep="${{ inputs.tag }}" --shard=1/1 --reporter=${{ inputs.reporter || 'list,github' }}
           else
+            # Run with full sharding when no tag is provided
             npm run test:playwright -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
           fi
       - name: Run element regression tests
@@ -121,7 +124,7 @@ jobs:
 
   test-result:
     needs: Playwright
-    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
+    if: ${{ always() }}
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
