@@ -59,8 +59,8 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || false }}
       matrix:
-        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ]
-        shardTotal: [ 10 ]
+        shardIndex: ${{ inputs.tag == '' && '[1,2,3,4,5,6,7,8,9,10]' || '[1]' }}
+        shardTotal: ${{ inputs.tag == '' && '[10]' || '[1]' }}
         include:
         - shardIndex: "elements-regression"
     steps:
