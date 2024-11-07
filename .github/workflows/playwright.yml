@@ -108,21 +108,6 @@ jobs:
           if [ $? -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
           fi
-      - uses: actions/upload-artifact@v4
-          - name: Upload known issues status
-                if: ${{ matrix.shardIndex == 'known-issues' }}
-                uses: actions/upload-artifact@v4
-                with:
-                  name: known-issues-status
-                  path: known-issues-status.txt
-                  if-no-files-found: ignore
-                  retention-days: 2
-        if: always()
-        with:
-          name: playwright-test-results-${{ matrix.shardIndex }}
-          path: ${{ inputs.path-to-results || 'test-results/' }}
-          if-no-files-found: ignore
-          retention-days: 2
 
   test-result:
     needs: Playwright
