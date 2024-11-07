@@ -132,44 +132,28 @@ jobs:
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-
-      - name: Download known issues artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: known-issues-status
-          path: .
-
-      - name: Check if known issues file exists
-        id: known_issues_check
-        run: |
-          if [ -f known-issues-status.txt ]; then
-            echo "Known issues file exists."
-            echo "known_issues_file_exists=true" >> $GITHUB_ENV
-          else
-            echo "No known issues file found."
-            echo "known_issues_file_exists=false" >> $GITHUB_ENV
-
-      - name: Send Slack message for known issues
-        if: ${{ env.known_issues_file_exists == 'true' }}
+      - name: Checkout source code
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+        uses: actions/checkout@v4
+      - name: Send slack message
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Known issues detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Elementor Core: Playwright with WordPress nightly has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Elementor Core: Known issues detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Elementor Core: Playwright with WordPress nightly failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
             }
-
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
-
