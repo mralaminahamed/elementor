@@ -102,18 +102,27 @@ jobs:
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-      - name: Debug failure state for known-issues
+      - name: Save known issues state
         if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: echo "Failure state for known-issues: ${{ failure() }}"
-      - name: Set known issues failure output
-        if: ${{ failure() && matrix.shardIndex == 'known-issues' }}
         run: echo "known_issues_failed=true" > known-issues-status.txt
+
       - uses: actions/upload-artifact@v4
         if: ${{ matrix.shardIndex == 'known-issues' }}
         with:
           name: known-issues-status
           path: known-issues-status.txt
 
+      - name: Download known issues status
+        uses: actions/download-artifact@v4
+        with:
+          name: known-issues-status
+          path: .
+
+      - name: Set known issues variable
+        run: |
+          if [ -f known-issues-status.txt ]; then
+            echo "known_issues_failed=true" >> $GITHUB_ENV
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -124,9 +133,19 @@ jobs:
 
   test-result:
     needs: Playwright
+    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
+      - name: Debug known_issues_failed variable
+        run: echo "known_issues_failed is ${{ env.known_issues_failed }}"
+
+      - name: Test status
+        run: echo "Test status is - ${{ needs.Playwright.result }}"
+
+      - name: Checkout source code
+        if: ${{ env.known_issues_failed == 'true' }}
+        uses: actions/checkout@v4
       - name: Download known issues status
         uses: actions/download-artifact@v4
         with:
@@ -139,11 +158,6 @@ jobs:
             echo "known_issues_failed=true" >> $GITHUB_ENV
           fi
 
-      - name: Debug known_issues_failed variable
-        run: echo "known_issues_failed is ${{ env.known_issues_failed }}"
-
-      - name: Test status
-        run: echo "Test status is - ${{ needs.Playwright.result }}"
 
       - name: Send Slack message
         if: ${{ env.known_issues_failed == 'true' }}
