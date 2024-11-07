@@ -38,6 +38,7 @@ on:
         description: 'Cancel tests when one of them fails'
         default: false
 
+# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
@@ -46,7 +47,6 @@ jobs:
   build-plugin:
     name: Build plugin
     uses: ./.github/workflows/build.yml
-
   Playwright:
     name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
     runs-on: ubuntu-latest
@@ -83,6 +83,7 @@ jobs:
         run: |
           npm run start-local-server
       - name: Update WordPress to nightly build
+        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -101,17 +102,21 @@ jobs:
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-      - name: Set known issues failure output
-        if: ${{ failure() && matrix.shardIndex == 'known-issues' }}
-        run: echo "known_issues_failed=true" > known-issues-status.txt
+        run: |
+          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
+          # Check if the test failed and create a marker file if it did
+          if [ $? -ne 0 ]; then
+            echo "I am well known" > known-issues-status.txt
+          fi
       - uses: actions/upload-artifact@v4
-        if: ${{ matrix.shardIndex == 'known-issues' }}
-        with:
-          name: known-issues-status
-          path: known-issues-status.txt
-
-      - uses: actions/upload-artifact@v4
+          - name: Upload known issues status
+                if: ${{ matrix.shardIndex == 'known-issues' }}
+                uses: actions/upload-artifact@v4
+                with:
+                  name: known-issues-status
+                  path: known-issues-status.txt
+                  if-no-files-found: ignore
+                  retention-days: 2
         if: always()
         with:
           name: playwright-test-results-${{ matrix.shardIndex }}
@@ -121,42 +126,44 @@ jobs:
 
   test-result:
     needs: Playwright
+    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
-      - name: Download known issues status
+      - name: Test status
+        run: echo "Test status is - ${{ needs.Playwright.result }}"
+
+      - name: Download known issues artifact
         uses: actions/download-artifact@v4
         with:
           name: known-issues-status
           path: .
 
-      - name: Set known issues variable
+      - name: Check if known issues file exists
+        id: known_issues_check
         run: |
           if [ -f known-issues-status.txt ]; then
-            echo "known_issues_failed=true" >> $GITHUB_ENV
-          fi
+            echo "Known issues file exists."
+            echo "known_issues_file_exists=true" >> $GITHUB_ENV
+          else
+            echo "No known issues file found."
+            echo "known_issues_file_exists=false" >> $GITHUB_ENV
 
-      - name: Debug known_issues_failed variable
-        run: echo "known_issues_failed is ${{ env.known_issues_failed }}"
-
-      - name: Test status
-        run: echo "Test status is - ${{ needs.Playwright.result }}"
-
-      - name: Send Slack message
-        if: ${{ env.known_issues_failed == 'true' }}
+      - name: Send Slack message for known issues
+        if: ${{ env.known_issues_file_exists == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Playwright with WordPress nightly has known issues: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Elementor Core: Known issues detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Elementor Core: Playwright with WordPress nightly has known issues: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Elementor Core: Known issues detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
@@ -165,3 +172,4 @@ jobs:
       - name: Check Playwright matrix status
         if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
         run: exit 1
+
