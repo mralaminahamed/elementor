@@ -102,9 +102,6 @@ jobs:
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-      - name: Debug failure state for known-issues
-        if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: echo "Failure state for known-issues ${{ failure() }}"
       - name: Set known issues failure output
         if: ${{ failure() && matrix.shardIndex == 'known-issues' }}
         run: echo "known_issues_failed=true" > known-issues-status.txt
