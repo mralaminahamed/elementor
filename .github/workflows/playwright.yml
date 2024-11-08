@@ -162,7 +162,7 @@ jobs:
             }
 
       - name: Send Slack message for known issues
-        if: ${{ env.known_issues_failed == 'true' && github.event_name == 'schedule' }}
+        if: ${{ env.known_issues_failed == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
