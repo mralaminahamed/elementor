@@ -60,57 +60,43 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
-
       - name: Install Node.js 20.x
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'npm'
-
       - name: Install dependencies
         run: |
           npm ci
           sed -i -e "s/image: 'mariadb:lts'/image: 'mariadb:11.2.4-jammy'/g" node_modules/@wordpress/env/lib/build-docker-compose-config.js
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build-plugin.outputs.artifact_name }}
           path: ./build
-
       - name: Update wp-env.json file
         env:
           PHP_VERSION: '8.0'
           WP_CORE_VERSION: 'latest'
         run: node ./.github/scripts/build-wp-env.js
-
       - name: Install WordPress environment
-        run: |
-          npm run start-local-server
-
+        run: npm run start-local-server
       - name: Update WordPress to nightly build
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
-
       - name: Setup test data
         run: npm run test:setup:playwright
-
       - name: WordPress debug information
         run: |
           npx wp-env run cli wp core version
           npx wp-env run cli wp --info
-
       - name: Install playwright/test
-        run: |
-          npx playwright install chromium
-
+        run: npx playwright install chromium
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
         run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
-
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
-
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
@@ -118,7 +104,14 @@ jobs:
           if [ $? -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
           fi
-
+      - name: Verify known-issues file
+        if: ${{ matrix.shardIndex == 'known-issues' }}
+        run: |
+          if [[ -f "known-issues-status.txt" ]]; then
+            echo "File exists, ready to upload."
+          else
+            echo "Error: File not found! Ensure known-issues-status.txt was created." && exit 1
+          fi
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
         uses: actions/upload-artifact@v4
@@ -132,45 +125,39 @@ jobs:
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Download known issues status
-        uses: actions/download-artifact@v4
-        with:
-          name: known-issues
-          path: ./known-issues
-
-      - name: Check known-issues status
-        id: known-issues-check
-        if: ${{ needs.Playwright.result != 'success' && github.event_name == 'schedule' }}
+      - name: Test status
+        run: echo "Test status is - ${{ needs.Playwright.result }}"
+      - name: Debug downloaded artifacts
+        id: debug-artifact
         run: |
           if [[ -f "./known-issues/known-issues-status.txt" ]]; then
-            echo "Known issues detected."
-            echo "known_issues_failed=true" >> $GITHUB_ENV
+            echo "::set-output name=success::true"
           else
-            echo "No known issues."
-            echo "known_issues_failed=false" >> $GITHUB_ENV
+            echo "::set-output name=success::false"
           fi
 
-      - name: Debug known-issues environment variable
-        run: echo "known_issues_failed=${{ env.known_issues_failed }}"
-
+      - name: Debug downloaded artifacts
+        run: |
+          if [[ -f "./known-issues/known-issues-status.txt" ]]; then
+            echo "Known issues file downloaded successfully."
+          else
+            echo "No known issues artifact found. Check if the Playwright job created and uploaded it."
+          fi
       - name: Send Slack message for known issues
-        if: ${{ env.known_issues_failed == 'true' }}
+        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' && steps.debug-artifact.outputs.success == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Known issue failure detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Known issues failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Known issue failure in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Known issues failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
