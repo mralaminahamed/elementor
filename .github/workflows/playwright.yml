@@ -102,8 +102,11 @@ jobs:
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
+          echo "Known issues test run completed." > known-issues-status.txt
           if [ $? -ne 0 ]; then
-            echo "I am well known" > known-issues-status.txt
+            echo "Known issues failed." >> known-issues-status.txt
+          else
+            echo "Known issues passed." >> known-issues-status.txt
           fi
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
@@ -129,8 +132,10 @@ jobs:
         id: debug-artifact
         run: |
           if [[ -f "./known-issues/known-issues-status.txt" ]]; then
+            echo "Known issues artifact found."
             echo "::set-output name=success::true"
           else
+            echo "Known issues artifact not found."
             echo "::set-output name=success::false"
           fi
 
