@@ -47,6 +47,7 @@ jobs:
   build-plugin:
     name: Build plugin
     uses: ./.github/workflows/build.yml
+
   Playwright:
     name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
     runs-on: ubuntu-latest
@@ -83,7 +84,6 @@ jobs:
         run: |
           npm run start-local-server
       - name: Update WordPress to nightly build
-        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -104,24 +104,45 @@ jobs:
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-          # Check if the test failed and create a marker file if it did
           if [ $? -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
           fi
+      - name: Upload known-issues status
+        if: ${{ matrix.shardIndex == 'known-issues' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: known-issues-status
+          path: known-issues-status.txt
+          if-no-files-found: ignore
 
   test-result:
     needs: Playwright
-    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
+    if: ${{ always() }}
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
-      - name: Checkout source code
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
-        uses: actions/checkout@v4
-      - name: Send slack message
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+
+      - name: Download known-issues artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: known-issues-status
+          path: ./known-issues/
+        if: ${{ needs.Playwright.result != 'success' && github.event_name == 'schedule' }}
+
+      - name: Check known-issues status
+        id: known-issues-check
+        if: ${{ needs.Playwright.result != 'success' && github.event_name == 'schedule' }}
+        run: |
+          if [[ -f "./known-issues/known-issues-status.txt" ]]; then
+            echo "known_issues_failed=true" >> $GITHUB_ENV
+          else
+            echo "known_issues_failed=false" >> $GITHUB_ENV
+          fi
+
+      - name: Send Slack message for regular failures
+        if: ${{ env.known_issues_failed == 'false' && needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -139,6 +160,23 @@ jobs:
                 }
               ]
             }
-      - name: Check Playwright matrix status
-        if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
-        run: exit 1
+
+      - name: Send Slack message for known issues
+        if: ${{ env.known_issues_failed == 'true' && github.event_name == 'schedule' }}
+        uses: ./.github/workflows/post-to-slack
+        with:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
+          SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
+          PAYLOAD: |
+            {
+              "text": "Known issue failure detected in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Known issue failure in Playwright tests: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
