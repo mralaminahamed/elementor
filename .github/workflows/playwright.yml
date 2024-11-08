@@ -90,7 +90,8 @@ jobs:
           npx wp-env run cli wp core version
           npx wp-env run cli wp --info
       - name: Install playwright/test
-        run: npx playwright install chromium
+        run: |
+          npx playwright install chromium
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
         run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
@@ -103,14 +104,6 @@ jobs:
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
           if [ $? -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
-          fi
-      - name: Verify known-issues file
-        if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: |
-          if [[ -f "known-issues-status.txt" ]]; then
-            echo "File exists, ready to upload."
-          else
-            echo "Error: File not found! Ensure known-issues-status.txt was created." && exit 1
           fi
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
@@ -125,8 +118,13 @@ jobs:
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
-      - name: Test status
-        run: echo "Test status is - ${{ needs.Playwright.result }}"
+      - name: Download known issues status
+        uses: actions/download-artifact@v4
+        id: download-known-issues
+        with:
+          name: known-issues
+          path: ./known-issues
+
       - name: Debug downloaded artifacts
         id: debug-artifact
         run: |
@@ -136,15 +134,8 @@ jobs:
             echo "::set-output name=success::false"
           fi
 
-      - name: Debug downloaded artifacts
-        run: |
-          if [[ -f "./known-issues/known-issues-status.txt" ]]; then
-            echo "Known issues file downloaded successfully."
-          else
-            echo "No known issues artifact found. Check if the Playwright job created and uploaded it."
-          fi
       - name: Send Slack message for known issues
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' && steps.debug-artifact.outputs.success == 'true' }}
+        if: ${{ github.event_name == 'schedule' && steps.debug-artifact.outputs.success == 'true' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
@@ -162,7 +153,3 @@ jobs:
                 }
               ]
             }
-
-      - name: Check Playwright matrix status
-        if: ${{ needs.Playwright.result != 'success' && needs.Playwright.result != 'skipped' }}
-        run: exit 1
