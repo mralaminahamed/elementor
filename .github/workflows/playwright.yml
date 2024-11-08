@@ -101,13 +101,10 @@ jobs:
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
-          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-          echo "Known issues test run completed." > known-issues-status.txt
-          if [ $? -ne 0 ]; then
-            echo "Known issues failed." >> known-issues-status.txt
-          else
-            echo "Known issues passed." >> known-issues-status.txt
-          fi
+          set -e
+          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }} || echo "Known issues failed." > known-issues-status.txt
+          echo "Known issues test run completed." >> known-issues-status.txt
+
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' && always() }}
         uses: actions/upload-artifact@v4
