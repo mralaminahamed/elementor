@@ -101,9 +101,15 @@ jobs:
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
-          set -e
-          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }} || echo "Known issues failed." > known-issues-status.txt
-          echo "Known issues test run completed." >> known-issues-status.txt
+          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
+          TEST_EXIT_CODE=$?
+          echo "Known issues test run completed." > known-issues-status.txt
+          if [ $TEST_EXIT_CODE -ne 0 ]; then
+            echo "Known issues failed." >> known-issues-status.txt
+            exit 1  # Mark the job as failed
+          else
+            echo "Known issues passed." >> known-issues-status.txt
+          fi
 
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' && always() }}
