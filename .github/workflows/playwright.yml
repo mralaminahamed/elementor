@@ -55,81 +55,86 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || false }}
       matrix:
-        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues" ]
-        shardTotal: [ 10 ]
+        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues"]
+        shardTotal: [10]
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
       - name: Install Node.js 20.x
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: 'npm'
+
       - name: Install dependencies
         run: |
           npm ci
           sed -i -e "s/image: 'mariadb:lts'/image: 'mariadb:11.2.4-jammy'/g" node_modules/@wordpress/env/lib/build-docker-compose-config.js
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build-plugin.outputs.artifact_name }}
           path: ./build
+
       - name: Update wp-env.json file
         env:
           PHP_VERSION: '8.0'
           WP_CORE_VERSION: 'latest'
         run: node ./.github/scripts/build-wp-env.js
+
       - name: Install WordPress environment
         run: npm run start-local-server
+
       - name: Update WordPress to nightly build
+        if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
+
       - name: Setup test data
         run: npm run test:setup:playwright
+
       - name: WordPress debug information
         run: |
           npx wp-env run cli wp core version
           npx wp-env run cli wp --info
+
       - name: Install playwright/test
         run: |
           npx playwright install chromium
+
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
         run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
+
       - name: Run element regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
+
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
           # Run Playwright tests for known issues
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
 
-          # Capture exit status of tests
+          # Capture test status
           TEST_EXIT_CODE=$?
 
-          # Always create a status file
-          echo "Status: Known issues test run completed." > known-issues-status.txt
+          # Ensure known-issues-status.txt is created
+          echo "Known issues test run completed." > known-issues-status.txt
           if [ $TEST_EXIT_CODE -ne 0 ]; then
-            echo "Status: Known issues failed." >> known-issues-status.txt
+            echo "Test Result: Failed" >> known-issues-status.txt
           else
-            echo "Status: Known issues passed." >> known-issues-status.txt
+            echo "Test Result: Passed" >> known-issues-status.txt
           fi
-
-          # Debug: Output the file content
-          echo "== Known Issues Status File =="
-          cat known-issues-status.txt
-
-          # Exit with the test result status
           exit $TEST_EXIT_CODE
 
       - name: Debug artifact existence
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
-          echo "Debugging artifact existence..."
-          echo "Current directory contents:"
+          echo "Debugging known-issues-status.txt existence..."
           ls -la
-          echo "Looking for known-issues-status.txt:"
-          find . -name "known-issues-status.txt"
+          cat known-issues-status.txt || echo "File does not exist!"
 
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
@@ -144,39 +149,34 @@ jobs:
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
+      - name: Test status
+        run: echo "Test status is - ${{ needs.Playwright.result }}"
+
       - name: Download known issues status
         uses: actions/download-artifact@v4
-        id: download-known-issues
         with:
           name: known-issues
-          path: ./known-issues
 
-      - name: Debug downloaded artifacts
-        id: debug-artifact
+      - name: Debug downloaded artifact
         run: |
-          if [[ -f "./known-issues/known-issues-status.txt" ]]; then
-            echo "Known issues artifact found."
-            echo "::set-output name=success::true"
-          else
-            echo "Known issues artifact not found."
-            echo "::set-output name=success::false"
-          fi
+          echo "Downloaded artifact contents:"
+          cat known-issues-status.txt || echo "File not found!"
 
       - name: Send Slack message for known issues
-        if: ${{ github.event_name == 'schedule' && steps.debug-artifact.outputs.success == 'true' }}
+        if: ${{ needs.Playwright.result == 'failure' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Known issues failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Elementor Core: Known issues test failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Known issues failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Elementor Core: Known issues test failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
