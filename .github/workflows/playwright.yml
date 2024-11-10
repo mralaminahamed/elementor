@@ -88,7 +88,7 @@ jobs:
         run: npm run start-local-server
 
       - name: Update WordPress to nightly build
-        if: ${{ github.event_name == 'schedule' }}
+        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
 
       - name: Setup test data
