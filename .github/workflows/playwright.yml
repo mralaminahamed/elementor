@@ -115,6 +115,7 @@ jobs:
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
           # Run Playwright tests for known issues
+          echo "Running tests with '@known-issue' tag..."
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
 
           # Capture test status
