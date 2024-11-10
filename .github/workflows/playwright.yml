@@ -107,23 +107,36 @@ jobs:
           # Capture exit status of tests
           TEST_EXIT_CODE=$?
 
-          # Always create a status file
-          echo "Known issues test run completed." > known-issues-status.txt
+          # Always create a status file in the current working directory
+          STATUS_FILE_PATH=$(pwd)/known-issues-status.txt
+          echo "Known issues test run completed." > $STATUS_FILE_PATH
           if [ $TEST_EXIT_CODE -ne 0 ]; then
-            echo "Known issues failed." >> known-issues-status.txt
+            echo "Known issues failed." >> $STATUS_FILE_PATH
           else
-            echo "Known issues passed." >> known-issues-status.txt
+            echo "Known issues passed." >> $STATUS_FILE_PATH
           fi
+
+          # Output the file path for debugging
+          echo "Status file created at $STATUS_FILE_PATH"
+          cat $STATUS_FILE_PATH
 
           # Exit with the original test result status
           exit $TEST_EXIT_CODE
 
+      - name: Debug artifact path
+        if: ${{ matrix.shardIndex == 'known-issues' }}
+        run: |
+          echo "Listing files in the current working directory:"
+          ls -la
+          echo "Looking for known-issues-status.txt:"
+          find . -name "known-issues-status.txt"
+
       - name: Upload known issues status
-        if: ${{ matrix.shardIndex == 'known-issues' && always() }}
+        if: ${{ matrix.shardIndex == 'known-issues' }}
         uses: actions/upload-artifact@v4
         with:
           name: known-issues
-          path: known-issues-status.txt
+          path: ./known-issues-status.txt
 
   test-result:
     needs: Playwright
