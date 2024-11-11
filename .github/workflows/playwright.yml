@@ -102,11 +102,15 @@ jobs:
         run: |
           echo "Running known issues tests..."
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-          if [ $? -ne 0 ]; then
+          TEST_EXIT_CODE=$?
+          echo "Test exit code: $TEST_EXIT_CODE"
+          if [ $TEST_EXIT_CODE -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
           else
             echo "No known issue failures" > known-issues-status.txt
           fi
+          echo "known-issues-status.txt created with content:"
+          cat known-issues-status.txt
       - name: Debug known issues status file
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
@@ -119,6 +123,7 @@ jobs:
         with:
           name: known-issues
           path: known-issues-status.txt
+
 
 
   test-result:
