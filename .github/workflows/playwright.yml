@@ -98,8 +98,8 @@ jobs:
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
+        continue-on-error: true
         run: |
-          set -e
           echo "Running known issues tests..."
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
           if [ $? -ne 0 ]; then
@@ -119,6 +119,7 @@ jobs:
         with:
           name: known-issues
           path: known-issues-status.txt
+
 
   test-result:
     needs: Playwright
