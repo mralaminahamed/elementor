@@ -104,25 +104,36 @@ jobs:
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
           TEST_EXIT_CODE=$?
           echo "Test exit code: $TEST_EXIT_CODE"
+
+          # Ensure the file is created
           if [ $TEST_EXIT_CODE -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
           else
             echo "No known issue failures" > known-issues-status.txt
           fi
-          echo "known-issues-status.txt created with content:"
-          cat known-issues-status.txt
+          ls -la
+          echo "known-issues-status.txt content:"
+          [ -f known-issues-status.txt ] && cat known-issues-status.txt || echo "File not found!"
+
       - name: Debug known issues status file
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
           echo "Checking known issues file..."
           ls -la
-          cat known-issues-status.txt
+          if [ -f known-issues-status.txt ]; then
+            echo "File exists. Content:"
+            cat known-issues-status.txt
+          else
+            echo "known-issues-status.txt does not exist."
+          fi
+
       - name: Upload known issues status
-        if: ${{ matrix.shardIndex == 'known-issues' }}
+        if: ${{ matrix.shardIndex == 'known-issues' && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: known-issues
           path: known-issues-status.txt
+
 
 
 
