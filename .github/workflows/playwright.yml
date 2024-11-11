@@ -38,7 +38,6 @@ on:
         description: 'Cancel tests when one of them fails'
         default: false
 
-# This allows a subsequently queued workflow run to interrupt previous runs
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
@@ -56,8 +55,8 @@ jobs:
     strategy:
       fail-fast: ${{ inputs.fail_fast || false }}
       matrix:
-        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues"]
-        shardTotal: [10]
+        shardIndex: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues" ]
+        shardTotal: [ 10 ]
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -87,6 +86,10 @@ jobs:
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
       - name: Setup test data
         run: npm run test:setup:playwright
+      - name: WordPress debug information
+        run: |
+          npx wp-env run cli wp core version
+          npx wp-env run cli wp --info
       - name: Install playwright/test
         run: |
           npx playwright install chromium
@@ -98,81 +101,52 @@ jobs:
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
-        continue-on-error: true
         run: |
-          echo "Running known issues tests..."
           npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-          TEST_EXIT_CODE=$?
-          echo "Test exit code: $TEST_EXIT_CODE"
-
-          # Ensure the file is created
-          if [ $TEST_EXIT_CODE -ne 0 ]; then
+          if [ $? -ne 0 ]; then
             echo "I am well known" > known-issues-status.txt
-          else
-            echo "No known issue failures" > known-issues-status.txt
           fi
-          ls -la
-          echo "known-issues-status.txt content:"
-          [ -f known-issues-status.txt ] && cat known-issues-status.txt || echo "File not found!"
-
-      - name: Debug known issues status file
+      - name: Upload known-issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: |
-          echo "Checking known issues file..."
-          ls -la
-          if [ -f known-issues-status.txt ]; then
-            echo "File exists. Content:"
-            cat known-issues-status.txt
-          else
-            echo "known-issues-status.txt does not exist."
-          fi
-
-      - name: Upload known issues status
-        if: ${{ matrix.shardIndex == 'known-issues' && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: known-issues
+          name: known-issues-status
           path: known-issues-status.txt
-
-
-
+          if-no-files-found: warn
 
   test-result:
     needs: Playwright
-    if: ${{ always() }}
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
-      - name: Test status
-        run: echo "Test status is - ${{ needs.Playwright.result }}"
-      - name: Download known issues status
-        if: ${{ needs.Playwright.result == 'failure' }}
+      - name: Checkout source code
+        uses: actions/checkout@v4
+      - name: Download known-issues artifact
         uses: actions/download-artifact@v4
         with:
-          name: known-issues
-          path: known-issues-status.txt
-      - name: Debug known issues artifact
-        if: ${{ needs.Playwright.result == 'failure' }}
+          name: known-issues-status
+          path: ./known-issues/
+          if-no-files-found: warn
+          continue-on-error: true
+      - name: Check known-issues status
         run: |
-          echo "Checking downloaded artifact..."
-          ls -la
-          cat known-issues-status.txt
-      - name: Send Slack message for known issues
-        if: ${{ needs.Playwright.result == 'failure' && github.event_name == 'schedule' }}
+          if [ -f "./known-issues/known-issues-status.txt" ]; then
+            echo "Known issues artifact exists"
+          else
+            echo "No known issues artifact found"
+          fi
+      - name: Test status
+        run: echo "Test status is - ${{ needs.Playwright.result }}"
+      - name: Send Slack message for failures
+        if: ${{ needs.Playwright.result == 'failure' }}
         uses: ./.github/workflows/post-to-slack
         with:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN }}
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Playwright known issues test has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Known Issues Playwright Test has failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
-                }
-              ]
+              "text": "Playwright tests have failed. Check details here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
+      - name: Send Slack message for known issues
+        if: ${{ steps.Check_known-issues_status.outputs.exists }}
+        run: echo "Known issues failed. See details in the logs."
