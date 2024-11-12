@@ -124,7 +124,9 @@ jobs:
           else
             echo "Test Result: Passed" >> known-issues-status.txt
           fi
-          exit $TEST_EXIT_CODE
+          # Do not exit here to ensure file creation
+          exit $TEST_EXIT_CODE || true
+
       - name: Debug artifact existence
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
