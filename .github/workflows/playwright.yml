@@ -117,6 +117,7 @@ jobs:
           npm run test:playwright -- --grep="@known-issue" --reporter=allure-playwright
 
           TEST_EXIT_CODE=$?
+
           echo "Known issues test run completed." > known-issues-status.txt
           if [ $TEST_EXIT_CODE -ne 0 ]; then
             echo "Test Result: Failed" >> known-issues-status.txt
@@ -124,7 +125,11 @@ jobs:
             echo "Test Result: Passed" >> known-issues-status.txt
           fi
 
+          echo "Contents of known-issues-status.txt:"
+          cat known-issues-status.txt
+
           exit $TEST_EXIT_CODE
+
 
       - name: Debug artifact existence
         if: ${{ matrix.shardIndex == 'known-issues' }}
