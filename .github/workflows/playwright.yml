@@ -114,9 +114,11 @@ jobs:
         run: |
           # Run Playwright tests for known issues
           echo "Running tests with '@known-issue' tag..."
-          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
+          npm run test:playwright -- --grep="@known-issue" --reporter=allure-playwright
+
           # Capture test status
           TEST_EXIT_CODE=$?
+
           # Ensure known-issues-status.txt is created
           echo "Known issues test run completed." > known-issues-status.txt
           if [ $TEST_EXIT_CODE -ne 0 ]; then
@@ -124,8 +126,9 @@ jobs:
           else
             echo "Test Result: Passed" >> known-issues-status.txt
           fi
-          # Do not exit here to ensure file creation
-          exit $TEST_EXIT_CODE || true
+
+          # Exit with original test result
+          exit $TEST_EXIT_CODE
 
       - name: Debug artifact existence
         if: ${{ matrix.shardIndex == 'known-issues' }}
