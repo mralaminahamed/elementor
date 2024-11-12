@@ -87,7 +87,6 @@ jobs:
         run: npm run start-local-server
 
       - name: Update WordPress to nightly build
-        #if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
 
       - name: Setup test data
@@ -97,9 +96,11 @@ jobs:
         run: |
           npx wp-env run cli wp core version
           npx wp-env run cli wp --info
+
       - name: Install playwright/test
         run: |
           npx playwright install chromium
+
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
         run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
@@ -112,14 +113,10 @@ jobs:
         if: ${{ matrix.shardIndex == 'known-issues' }}
         continue-on-error: true
         run: |
-          # Run Playwright tests for known issues
           echo "Running tests with '@known-issue' tag..."
           npm run test:playwright -- --grep="@known-issue" --reporter=allure-playwright
 
-          # Capture test status
           TEST_EXIT_CODE=$?
-
-          # Ensure known-issues-status.txt is created
           echo "Known issues test run completed." > known-issues-status.txt
           if [ $TEST_EXIT_CODE -ne 0 ]; then
             echo "Test Result: Failed" >> known-issues-status.txt
@@ -127,7 +124,6 @@ jobs:
             echo "Test Result: Passed" >> known-issues-status.txt
           fi
 
-          # Exit with original test result
           exit $TEST_EXIT_CODE
 
       - name: Debug artifact existence
@@ -136,6 +132,7 @@ jobs:
           echo "Debugging known-issues-status.txt existence..."
           ls -la
           cat known-issues-status.txt || echo "File does not exist!"
+
       - name: Upload known issues status
         if: ${{ matrix.shardIndex == 'known-issues' }}
         uses: actions/upload-artifact@v4
@@ -161,6 +158,7 @@ jobs:
         run: |
           echo "Downloaded artifact contents:"
           cat known-issues-status.txt || echo "File not found!"
+
       - name: Send Slack message for known issues
         if: ${{ needs.Playwright.result == 'failure' }}
         uses: ./.github/workflows/post-to-slack
