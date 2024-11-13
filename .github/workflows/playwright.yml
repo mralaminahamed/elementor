@@ -165,7 +165,7 @@ jobs:
           echo "Downloaded artifact contents:"
           cat known-issues-status.txt || echo "File not found!"
       - name: Checkout source code
-        if: always
+        if: ${{ always() }}
         uses: actions/checkout@v4
       - name: Send Slack message for known issues
         if: env.file_exists == 'true'
