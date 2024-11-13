@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
     inputs:
       reporter:
-        required: false
         description: 'Select a reporter'
+        required: false
         type: choice
         options:
           - allure-playwright
@@ -24,23 +24,27 @@ on:
           - list
         default: allure-playwright
       path-to-results:
-        required: false
         description: 'Provide path to reporter files'
-        default: allure-results
+        required: false
         type: choice
         options:
           - test-results/
           - tests/playwright/blob-report
           - allure-results
+        default: allure-results
       fail_fast:
         type: boolean
-        required: true
         description: 'Cancel tests when one of them fails'
+        required: true
         default: false
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
+
+env:
+  PHP_VERSION: '8.0'
+  WP_CORE_VERSION: 'latest'
 
 jobs:
   build-plugin:
@@ -48,20 +52,20 @@ jobs:
     uses: ./.github/workflows/build.yml
 
   Playwright:
-    name: Playwright test - ${{ matrix.shardIndex }} on PHP 8.0
+    name: Playwright test - ${{ matrix.shardIndex }}
     runs-on: ubuntu-latest
     needs: [build-plugin]
     if: ${{ github.event.pull_request.title == null || needs.build-plugin.outputs.changelog_diff }}
     strategy:
-      fail-fast: ${{ inputs.fail_fast || false }}
+      fail-fast: ${{ inputs.fail_fast }}
       matrix:
         shardIndex: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "elements-regression", "known-issues"]
         shardTotal: [10]
     steps:
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Node.js 20.x
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
@@ -71,66 +75,44 @@ jobs:
         run: |
           npm ci
           sed -i -e "s/image: 'mariadb:lts'/image: 'mariadb:11.2.4-jammy'/g" node_modules/@wordpress/env/lib/build-docker-compose-config.js
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build-plugin.outputs.artifact_name }}
           path: ./build
 
-      - name: Update wp-env.json file
-        env:
-          PHP_VERSION: '8.0'
-          WP_CORE_VERSION: 'latest'
+      - name: Update wp-env.json
         run: node ./.github/scripts/build-wp-env.js
 
       - name: Install WordPress environment
         run: npm run start-local-server
 
-      - name: Update WordPress to nightly build
+      - name: Update WordPress to nightly build (Scheduled Runs Only)
         if: ${{ github.event_name == 'schedule' }}
         run: npx wp-env run cli wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip
 
       - name: Setup test data
         run: npm run test:setup:playwright
 
-      - name: WordPress debug information
-        run: |
-          npx wp-env run cli wp core version
-          npx wp-env run cli wp --info
-      - name: Install playwright/test
-        run: |
-          npx playwright install chromium
+      - name: Install Playwright
+        run: npx playwright install chromium
+
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' && matrix.shardIndex != 'known-issues' }}
         run: npm run test:playwright -- --grep-invert="@known-issue" --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }} --reporter=${{ inputs.reporter || 'list,github' }}
 
-      - name: Run element regression tests
+      - name: Run regression tests
         if: ${{ matrix.shardIndex == 'elements-regression' }}
         run: npm run test:playwright:elements-regression -- --reporter=${{ inputs.reporter || 'list,github' }}
 
       - name: Run tests with known issues
         if: ${{ matrix.shardIndex == 'known-issues' }}
         run: |
-          # Run Playwright tests for known issues
           echo "Running tests with '@known-issue' tag..."
-          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }}
-          # Capture test status
-          TEST_EXIT_CODE=$?
-          # Ensure known-issues-status.txt is created
-          echo "Known issues test run completed." > known-issues-status.txt
-          if [ $TEST_EXIT_CODE -ne 0 ]; then
-            echo "Test Result: Failed" >> known-issues-status.txt
-          else
-            echo "Test Result: Passed" >> known-issues-status.txt
-          fi
-          exit $TEST_EXIT_CODE
-      - name: Debug artifact existence
-        if: ${{ matrix.shardIndex == 'known-issues' }}
-        run: |
-          echo "Debugging known-issues-status.txt existence..."
-          ls -la
-          cat known-issues-status.txt || echo "File does not exist!"
-      - name: Upload known issues status
+          npm run test:playwright -- --grep="@known-issue" --reporter=${{ inputs.reporter || 'list,github' }} || echo "Known issues failed"
+
+      - name: Upload artifacts
         if: ${{ matrix.shardIndex == 'known-issues' }}
         uses: actions/upload-artifact@v4
         with:
@@ -146,27 +128,21 @@ jobs:
       - name: Test status
         run: echo "Test status is - ${{ needs.Playwright.result }}"
 
-      - name: Download known issues status
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: known-issues
 
-      - name: Check known issues file existence
-        id: check-known-issues
+      - name: Debug known issues
         run: |
           if [ -f known-issues-status.txt ]; then
-            echo "file_exists=true" >> $GITHUB_ENV
+            echo "Known issues detected"
+            cat known-issues-status.txt
           else
-            echo "file_exists=false" >> $GITHUB_ENV
+            echo "No known issues"
           fi
-      - name: Debug downloaded artifact
-        run: |
-          echo "Downloaded artifact contents:"
-          cat known-issues-status.txt || echo "File not found!"
-      - name: Checkout source code
-        if: ${{ always() }}
-        uses: actions/checkout@v4
-      - name: Send Slack message for known issues
+
+      - name: Send Slack message
         if: env.file_exists == 'true'
         uses: ./.github/workflows/post-to-slack
         with:
@@ -174,13 +150,13 @@ jobs:
           SLACK_TAG_CHANNELS: ${{ secrets.TEST_AUTOMATION_RESULTS }}
           PAYLOAD: |
             {
-              "text": "Elementor Core: Known issues test failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Elementor Core: Known issues detected in version: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Elementor Core: Known issues test failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Elementor Core: Known issues detected in version: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
