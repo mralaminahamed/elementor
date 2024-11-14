@@ -87,7 +87,7 @@ test.describe( 'Container tests @container', testOptions, () => {
 		expect.soft( elBeforeButton ).toEqual( elAfterHeading );
 	} );
 
-	test.skip( 'Test widgets display inside the container using various directions and content width', async ( { page, apiRequests }, testInfo ) => {
+	test( 'Test widgets display inside the container using various directions and content width', async ( { page, apiRequests }, testInfo ) => {
 		// Arrange.
 		const wpAdmin = new WpAdminPage( page, testInfo, apiRequests );
 		const editor = await wpAdmin.openNewPage(),
