@@ -57,7 +57,7 @@
 		"@elementor/generate-wordpress-asset-file-webpack-plugin": "0.3.4",
 		"@elementor/wp-lite-env": "^0.0.19",
 		"@lodder/grunt-postcss": "^3.1.1",
-		"@playwright/test": "^1.49.1",
+		"@playwright/test": "^1.43.1",
 		"@testing-library/dom": "^9.3.3",
 		"@testing-library/react": "^14.1.2",
 		"@wordpress/babel-plugin-import-jsx-pragma": "^5.9.0",
