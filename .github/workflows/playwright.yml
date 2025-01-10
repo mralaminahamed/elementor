@@ -129,7 +129,7 @@ jobs:
           path: ./build
       - name: Download hello-elementor theme
         run: |
-          curl -L --output hello-elementor.zip "https://downloads.wordpress.org/theme/hello-elementor.zip"
+          curl -L --output hello-elementor.zip "https://downloads.wordpress.org/theme/hello-elementor.2.8.1.zip"
           unzip hello-elementor
       - name: Install WordPress environment
         run: |
