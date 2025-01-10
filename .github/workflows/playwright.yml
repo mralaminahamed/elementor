@@ -80,7 +80,8 @@ jobs:
         run: |
           npm run start-local-server
       - name: Update wordpress to nightly build
-        if: ${{ always }}
+        #for testing
+        if: always
         run: npx wp-lite-env cli --config=./tests/playwright/.playwright-wp-lite-env.json --port=8888 --command="wp core update https://wordpress.org/nightly-builds/wordpress-latest.zip"
       - name: Setup test data
         run: npm run test:setup:playwright
@@ -156,7 +157,7 @@ jobs:
 
   test-result:
     needs: [ Playwright, PlaywrightWithTag ]
-    if: ${{ always() }} # Will be run even if 'Playwright' matrix will be skipped
+    if: always()
     runs-on: ubuntu-22.04
     name: Playwright - Test Results
     steps:
