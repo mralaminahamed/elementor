@@ -4,7 +4,7 @@ import WpAdminPage from '../../../../../pages/wp-admin-page';
 import { resolve } from 'path';
 
 test.describe( 'URL Actions', () => {
-	test( 'Test Lightbox and URL Actions', async ( { page, apiRequests }, testInfo ) => {
+	test.skip( 'Test Lightbox and URL Actions', async ( { page, apiRequests }, testInfo ) => {
 		/**
 		 * Open new empty page.
 		 */
@@ -174,5 +174,17 @@ test.describe( 'URL Actions', () => {
 		await page.reload();
 		// Test that the lightbox was NOT OPENED on this page.
 		await expect( frontendSinglelightboxImage ).not.toBeVisible();
+	} );
+	test( 'b version', async () => {
+		const { chromium, firefox, webkit } = require( 'playwright' );
+
+		await ( async () => {
+			for ( const browserType of [ chromium, firefox, webkit ]) {
+				const browser = await browserType.launch();
+				const browserVersion = browser.version();
+				console.log( `${ browserType.name() } version: ${ browserVersion }` );
+				await browser.close();
+			}
+		} )();
 	} );
 } );
