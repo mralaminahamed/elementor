@@ -118,7 +118,7 @@ test.describe( 'Promotion tests @promotions', () => {
 		await expect.soft( saveAsGlobalPromotionLinkContainer ).toHaveAttribute( 'href', saveAsGlobalHref );
 	} );
 
-	test.skip( 'Promotions - Free to Pro - Admin top bar', async ( { page } ) => {
+	test( 'Promotions - Free to Pro - Admin top bar', async ( { page } ) => {
 		// Arrange.
 		const promotionContainer = '.e-admin-top-bar__secondary-area';
 
