@@ -28,7 +28,6 @@ export default defineConfig( {
 		? [
 			[ 'github' ],
 			[ 'list' ],
-			[ 'allure-playwright' ],
 		]
 		: 'list',
 	use: {
