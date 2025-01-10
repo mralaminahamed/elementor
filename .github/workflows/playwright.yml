@@ -72,10 +72,6 @@ jobs:
         with:
           name: ${{ needs.build-plugin.outputs.artifact_name }}
           path: ./build
-      - name: Download hello-elementor theme
-        run: |
-          curl -L --output hello-elementor.zip "https://github.com/elementor/hello-theme/archive/refs/tags/v3.2.0.zip"
-          unzip hello-elementor
       - name: Install WordPress environment
         run: |
           npm run start-local-server
