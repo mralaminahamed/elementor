@@ -91,7 +91,7 @@ jobs:
           npx wp-lite-env cli --config=./tests/playwright/.playwright-wp-lite-env.json --port=8888 --command="wp --info"
       - name: Install playwright/test
         run: |
-          npx playwright install chromium
+          npx playwright install chromium --with-deps --only-shell
       - name: Run Playwright tests
         if: ${{ matrix.shardIndex != 'elements-regression' }}
         run: npm run test:playwright  -- --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
